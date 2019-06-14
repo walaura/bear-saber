@@ -1,63 +1,160 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>Hello, WebVR! • A-Frame</title>
-    <meta name="description" content="Hello, WebVR! • A-Frame">
-    <script src="https://aframe.io/releases/0.9.2/aframe.min.js"></script>
-        <script>
-AFRAME.registerComponent('box', {
-  schema: {
-    width: {type: 'number', default: 1},
-    height: {type: 'number', default: 1},
-    depth: {type: 'number', default: 1},
-    color: {type: 'color', default: '#AAA'}
-  },
+	<head>
+		<meta charset="utf-8" />
+		<title>Hello, WebVR! • A-Frame</title>
+		<meta name="description" content="Hello, WebVR! • A-Frame" />
+		<script src="https://aframe.io/releases/0.9.2/aframe.min.js"></script>
+		<script src="https://unpkg.com/aframe-particle-system-component@1.0.x/dist/aframe-particle-system-component.min.js"></script>
 
-  init: function () {
-    var data = this.data;
-    var el = this.el;
-    this.geometry = new THREE.BoxBufferGeometry(data.width, data.height, data.depth);
-    this.material = new THREE.MeshStandardMaterial({color: data.color});
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
-    el.setObject3D('mesh', this.mesh);
-  },
+		<script>
+			const space = 1;
+			const size = 0.5;
+			const speed = 0.1;
+			const distance = 10;
+			const createEntity = () => {
+				const $entity = document.createElement('a-entity');
+				$entity.setAttribute('box', true);
+				$entity.addEventListener('model-loaded', function(e) {
+					var model = e.detail.model;
+					model.traverse(function(o) {
+						if (o instanceof THREE.Mesh) {
+							o.geometry.center();
+							o.geometry.computeBoundingBox();
+						}
+					});
+				});
+				$entity.setAttribute('gltf-model', '#bear');
+				$entity.className = 'box';
 
-  /**
-   * Update the mesh in response to property updates.
-   */
-  update: function (oldData) {
-    var data = this.data;
-    var el = this.el;
+				const [x, y] = [
+					Math.random() * space - space / 2,
+					Math.random() * space - space / 2,
+				];
 
-    // If `oldData` is empty, then this means we're in the initialization process.
-    // No need to update.
-    if (Object.keys(oldData).length === 0) { return; }
+				$entity.setAttribute('position', { x, y, z: distance * -1 });
+				$entity.setAttribute('scale', { x: size, y: size, z: size });
+				return $entity;
+			};
+			AFRAME.registerComponent('spawner', {
+				init: function() {
+					const { el } = this;
+					this.el.appendChild(createEntity());
+				},
+				delta: 0,
+				tick: function(time, timeDelta) {
+					this.delta += timeDelta;
+					if (this.delta > 200) {
+						this.delta = 0;
+						this.el.appendChild(createEntity());
+					}
+				},
+			});
 
-    // Geometry-related properties changed. Update the geometry.
-    if (data.width !== oldData.width ||
-        data.height !== oldData.height ||
-        data.depth !== oldData.depth) {
-      el.getObject3D('mesh').geometry = new THREE.BoxBufferGeometry(data.width, data.height,
-                                                                    data.depth);
-    }
+			AFRAME.registerComponent('box', {
+				delete: function() {
+					this.el.removeAttribute('particle-system');
+					this.el.parentNode.removeChild(this.el);
+				},
 
-    // Material-related properties changed. Update the material.
-    if (data.color !== oldData.color) {
-      el.getObject3D('mesh').material.color = new THREE.Color(data.color);
-    }
-  }
-});    </script>
-  </head>
-  <body>
-    <a-scene background="color: #FAFAFA">
-  <a-entity box="width: 0.5; height: 0.25; depth: 1; color: red"
-            position="0 0 -5"></a-entity>
-      <a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4" shadow></a-plane>
-      <a-entity oculus-touch-controls="hand: left"></a-entity>
-      <a-entity oculus-touch-controls="hand: right"></a-entity>
-      <a-entity id="teleHand" hand-controls="left" teleport-controls></a-entity>
-<a-entity id="blockHand" hand-controls="right"></a-entity>
-    </a-scene>
-  </body>
+				__dying: false,
+
+				deleteEpic: function() {
+					const { el } = this;
+					const current = el.object3D.position;
+					this.el.setAttribute('particle-system', {
+						color: ['#EF0000', '#44CC00'],
+						size: 1,
+						maxParticleCount: 20,
+					});
+					this.__dying = true;
+					setTimeout(() => {
+						el.components.box.delete();
+					}, 1000);
+				},
+
+				tick: function(time, timeDelta) {
+					const { el, __rotateDelta } = this;
+					const currentPosition = el.object3D.position;
+					const currentRotation = el.object3D.rotation;
+					el.object3D.rotation.x += __rotateDelta.x / 100;
+					el.object3D.rotation.y += __rotateDelta.y / 100;
+					el.object3D.rotation.z += __rotateDelta.z / 100;
+					if (!this.__dying) {
+						el.setAttribute('position', {
+							...currentPosition,
+							z: currentPosition.z + speed,
+						});
+					}
+					if (this.__dying) {
+						el.object3D.scale.x = Math.max(el.object3D.scale.x - 0.05, 0);
+						el.object3D.scale.y = Math.max(el.object3D.scale.y - 0.05, 0);
+						el.object3D.scale.z = Math.max(el.object3D.scale.z - 0.05, 0);
+					}
+					if (currentPosition.z > 5) {
+						el.components.box.delete();
+					}
+				},
+
+				init: function() {
+					const { el } = this;
+					this.__rotateDelta = {
+						x: Math.random() - 1,
+						y: Math.random() - 1,
+						z: Math.random() - 1,
+					};
+
+					el.addEventListener('raycaster-intersected', function(evt) {
+						el.components.box.deleteEpic();
+					});
+					el.addEventListener('click', function(evt) {
+						el.components.box.deleteEpic();
+					});
+				},
+			});
+
+			AFRAME.registerComponent('saber', {
+				init: function() {
+					const { el } = this;
+					this.geometry = new THREE.BoxGeometry(0.01, 0.01, 0.75);
+					this.material = new THREE.MeshStandardMaterial({ color: 'blue' });
+					this.mesh = new THREE.Mesh(this.geometry, this.material);
+					this.mesh.translateZ(-0.5);
+					el.object3D.add(this.mesh);
+				},
+			});
+		</script>
+	</head>
+	<body>
+		<a-scene cursor="rayOrigin: mouse">
+			<a-assets>
+				<a-asset-item id="bear" src="/assets/bear.gltf"></a-asset-item>
+			</a-assets>
+			<a-entity spawner position="0 1 0"></a-entity>
+			<a-entity
+				id="eltest"
+				position="0 2 -2"
+				geometry="primitive: plane; width: auto; height: auto"
+				material="color: #333"
+				text="value: Hello World;color: yellow;"
+			></a-entity>
+			<a-entity hand-controls="left" saber></a-entity>
+			<a-entity
+				hand-controls="right"
+				saber
+				raycaster="showLine: true; far: 1.25"
+				line="color: orange; opacity: 0.5"
+			></a-entity>
+		</a-scene>
+	</body>
+	<style>
+		#info {
+			position: absolute;
+			top: 10px;
+			width: 100%;
+			text-align: center;
+			z-index: 100;
+			display: block;
+		}
+	</style>
 </html>
