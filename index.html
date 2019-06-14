@@ -5,13 +5,59 @@
     <title>Hello, WebVR! • A-Frame</title>
     <meta name="description" content="Hello, WebVR! • A-Frame">
     <script src="https://aframe.io/releases/0.9.2/aframe.min.js"></script>
+        <script>
+AFRAME.registerComponent('box', {
+  schema: {
+    width: {type: 'number', default: 1},
+    height: {type: 'number', default: 1},
+    depth: {type: 'number', default: 1},
+    color: {type: 'color', default: '#AAA'}
+  },
+
+  init: function () {
+    var data = this.data;
+    var el = this.el;
+    this.geometry = new THREE.BoxBufferGeometry(data.width, data.height, data.depth);
+    this.material = new THREE.MeshStandardMaterial({color: data.color});
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    el.setObject3D('mesh', this.mesh);
+  },
+
+  /**
+   * Update the mesh in response to property updates.
+   */
+  update: function (oldData) {
+    var data = this.data;
+    var el = this.el;
+
+    // If `oldData` is empty, then this means we're in the initialization process.
+    // No need to update.
+    if (Object.keys(oldData).length === 0) { return; }
+
+    // Geometry-related properties changed. Update the geometry.
+    if (data.width !== oldData.width ||
+        data.height !== oldData.height ||
+        data.depth !== oldData.depth) {
+      el.getObject3D('mesh').geometry = new THREE.BoxBufferGeometry(data.width, data.height,
+                                                                    data.depth);
+    }
+
+    // Material-related properties changed. Update the material.
+    if (data.color !== oldData.color) {
+      el.getObject3D('mesh').material.color = new THREE.Color(data.color);
+    }
+  }
+});    </script>
   </head>
   <body>
     <a-scene background="color: #FAFAFA">
-      <a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9" shadow></a-box>
-      <a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E" shadow></a-sphere>
-      <a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D" shadow></a-cylinder>
+  <a-entity box="width: 0.5; height: 0.25; depth: 1; color: red"
+            position="0 0 -5"></a-entity>
       <a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4" shadow></a-plane>
+      <a-entity oculus-touch-controls="hand: left"></a-entity>
+      <a-entity oculus-touch-controls="hand: right"></a-entity>
+      <a-entity id="teleHand" hand-controls="left" teleport-controls></a-entity>
+<a-entity id="blockHand" hand-controls="right"></a-entity>
     </a-scene>
   </body>
 </html>
